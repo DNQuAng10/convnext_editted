@@ -9,6 +9,13 @@
 import os
 from torchvision import datasets, transforms
 
+import os
+import random
+import cv2
+import torch
+import numpy as np
+from torch.utils.data import Dataset
+
 from timm.data.constants import \
     IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from timm.data import create_transform
@@ -40,6 +47,11 @@ def build_dataset(is_train, args):
         dataset = datasets.ImageFolder(root, transform=transform)
         nb_classes = args.nb_classes
         assert len(dataset.class_to_idx) == nb_classes
+    elif args.data_set == "face_folder":
+        root = args.data_path
+        train_file = args.train_file
+        dataset = ImageDataset(data_root=root, train_file=train_file, img_size=224)
+        nb_classes = args.nb_classes
     else:
         raise NotImplementedError()
     print("Number of the class = %d" % nb_classes)
@@ -94,3 +106,36 @@ def build_transform(is_train, args):
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
     return transforms.Compose(t)
+
+class ImageDataset(Dataset):
+    def __init__(self, data_root, train_file, crop_eye=False, img_size=None):
+        self.data_root = data_root
+        self.train_list = []
+        train_file_buf = open(train_file)
+        line = train_file_buf.readline().strip()
+        while line:
+            try:
+                image_path, image_label = line.split(' ')
+            except:
+                image_path, image_label = line.split(";")
+            self.train_list.append((image_path, int(image_label)))
+            line = train_file_buf.readline().strip()
+        self.crop_eye = crop_eye
+        self.img_size = img_size
+    def __len__(self):
+        return len(self.train_list)
+    def __getitem__(self, index):
+        image_path, image_label = self.train_list[index]
+        image_path = os.path.join(self.data_root, image_path)
+        image = cv2.imread(image_path)
+        if self.crop_eye:
+            image = image[:60, :]
+        if self.img_size:
+            image = cv2.resize(image, (self.img_size, self.img_size)) #128 * 128
+        if random.random() > 0.5:
+            image = cv2.flip(image, 1)
+        if image.ndim == 2:
+            image = image[:, :, np.newaxis]
+        image = (image.transpose((2, 0, 1)) - 127.5) * 0.0078125
+        image = torch.from_numpy(image.astype(np.float32))
+        return image, image_label

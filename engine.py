@@ -50,10 +50,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         if use_amp:
             with torch.cuda.amp.autocast():
-                output = model(samples)
+                output = model(samples, targets)
                 loss = criterion(output, targets)
         else: # full precision
-            output = model(samples)
+            output = model.forward(samples, targets)
             loss = criterion(output, targets)
 
         loss_value = loss.item()
